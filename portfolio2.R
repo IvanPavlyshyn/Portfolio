@@ -56,7 +56,7 @@ for( i in 1:10000)
   spec <- portfolioSpec()
   setSolver(spec) <- "solveRquadprog"
   setNFrontierPoints(spec) <-dim(portfolioReturns)[2]
-  constraints <- c('minW[1:assets]=0.03', 'maxW[1:assets]=0.3')
+  constraints <- c('minW[1:assets]=0.01', 'maxW[1:assets]=0.25')
   portfolioConstraints(portfolioReturns, spec, constraints)
   
   # calculate the efficient frontier
@@ -82,7 +82,7 @@ for( i in 1:10000)
  
   
   #Get Minimum Variance Port, Tangency Port, etc.
-  mvp <- minvariancePortfolio(portfolioReturns, spec=spec, constraints=constraints)
+  mvp <- minvariancePortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
   
   simul[i,"MVreturn"]<-mvp@portfolio@portfolio$targetReturn[[1]]
   simul[i,"MVrisk"]<-mvp@portfolio@portfolio$targetRisk[[1]]
