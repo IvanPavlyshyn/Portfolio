@@ -7,13 +7,13 @@ library(plyr)
 library(PerformanceAnalytics)
 library(ggplot2)
 library(reshape)
-setwd( "/Users/Ivan/Documents")
+ 
 
 
 ######################STEP ONE: Create Returns Time Series#########################################
 options(stringsAsFactors = F)
 spy_list<-read.csv('spy_list.csv')
-spy_list<-subset(spy_list, Ticker != 'RDS-A')
+spy_list<-subset(spy_list,! Ticker  %in% c('RDS-A','СCI'))
 #Calculate Returns: Daily
 portfolioPrices <- NULL
 for (Ticker in spy_list$Ticker)
@@ -25,17 +25,17 @@ for (Ticker in spy_list$Ticker)
 
 colnames(portfolioPrices)<-spy_list$Ticker
 
-simul<-as.data.frame(matrix(NA, nrow = 30000, ncol=19))
+simul<-as.data.frame(matrix(NA, nrow = 10000, ncol=19))
 names(simul)<-c('as1','as2','as3','as4','as5','as6','as7','as8','as9','as10','as11','as12','as13','as14','as15','MVreturn','MVrisk','TGreturn','TGrisk')
 
 t1<-Sys.time()
 set.seed(77)
-for( i in 1:30000)
+for( i in 1:10000)
 {
   
   
  
-  ticker_list<-spy_list[sample(seq(1,15,by=1),size=sample(seq(6,15,1),size=1)),'Ticker']
+  ticker_list<-spy_list[sample(seq(1,25,by=1),size=sample(seq(7,15,1),size=1)),'Ticker']
   simul[i,c(1:length(ticker_list))]<-ticker_list
   
   portfolioPrices_n<-portfolioPrices[,ticker_list]
@@ -56,7 +56,7 @@ for( i in 1:30000)
   spec <- portfolioSpec()
   setSolver(spec) <- "solveRquadprog"
   setNFrontierPoints(spec) <-dim(portfolioReturns)[2]
-  constraints <- c('minW[1:assets]=0', 'maxW[1:assets]=0.35')
+  constraints <- c('minW[1:assets]=0.03', 'maxW[1:assets]=0.3')
   portfolioConstraints(portfolioReturns, spec, constraints)
   
   # calculate the efficient frontier
@@ -75,14 +75,15 @@ for( i in 1:30000)
   #plot(effFrontier,c(1,2,3,4))
   
   #Plot Frontier Weights (Can Adjust Number of Points)
-  frontierWeights <- getWeights(effFrontier) # get allocations for each instrument for each point on the efficient frontier
-  colnames(frontierWeights) <- ticker_list
+  frontierWeights <-getWeights(effFrontier) # get allocations for each instrument for each point on the efficient frontier
+  colnames(frontierWeights) <-ticker_list 
   risk_return <- frontierPoints(effFrontier)
   
  
   
   #Get Minimum Variance Port, Tangency Port, etc.
   mvp <- minvariancePortfolio(portfolioReturns, spec=spec, constraints=constraints)
+  
   simul[i,"MVreturn"]<-mvp@portfolio@portfolio$targetReturn[[1]]
   simul[i,"MVrisk"]<-mvp@portfolio@portfolio$targetRisk[[1]]
   
@@ -108,10 +109,10 @@ simul$R_P_mv<-simul$MVreturn/simul$MVrisk
 
 
 simul<-simul[order(simul$R_P_tg,decreasing = T),]
-best_portf_tg<- unlist(simul[1,1:15])
+best_portf_tg<- unlist(simul[1,1:8])
 
 simul<-simul[order(simul$R_P_mv,decreasing = T),]
-best_portf_mv<- unlist(simul[1,1:8])
+best_portf_mv<- unlist(simul[1,1:10])
 
 portfolioPrices_n<-portfolioPrices[,best_portf_tg]
 portfolioPrices_n<-na.omit(portfolioPrices_n)
@@ -122,6 +123,7 @@ colnames(portfolioReturns) <- best_portf_tg
 portfolioReturns <- as.timeSeries(portfolioReturns)
 scenarios <-dim(portfolioReturns)[1]
 assets <- dim(portfolioReturns)[2]
+constraints <- c('minW[1:assets]=0.03', 'maxW[1:assets]=0.3')
 effFrontier <- portfolioFrontier(portfolioReturns, constraints = constraints)
 frontierWeights_tg <- getWeights(effFrontier)  
 colnames(frontierWeights_tg) <- best_portf_tg
@@ -144,11 +146,12 @@ colnames(portfolioReturns) <- best_portf_mv
 portfolioReturns <- as.timeSeries(portfolioReturns)
 scenarios <-dim(portfolioReturns)[1]
 assets <- dim(portfolioReturns)[2]
+constraints <- c('minW[1:assets]=0.03', 'maxW[1:assets]=0.3')
 effFrontier <- portfolioFrontier(portfolioReturns, constraints = constraints)
 frontierWeights_mv <- getWeights(effFrontier)  
 colnames(frontierWeights_mv) <- best_portf_mv
 risk_return <- frontierPoints(effFrontier)
-mvp <- minvariancePortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
+mvp <- minvariancePortfolio(portfolioReturns, spec=spec, constraints=constraints)
 
 tailoredFrontierPlot(object=effFrontier)
 
