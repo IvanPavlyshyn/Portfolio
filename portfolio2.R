@@ -98,6 +98,7 @@ for( i in 1:30000)
 t2<-Sys.time()
 t2-t1
 
+
 performance<-function(simul_data) {
   
   simul<-simul_data
