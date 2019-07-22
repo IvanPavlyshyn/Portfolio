@@ -1,28 +1,18 @@
 ﻿Ticker,Sector
-SPG,REITS
-СCI,REITS
+CCI,REITS
+RDS-A,REITS
 NEE,Utilities
-RDS-A,Energy
-XOM,Energy
-QCOM,Technology
-MSFT,Technology
-INTC,Technology
+MSFT,Energy
+INTC,Energy
 ATVI,Technology
-UNH,Health Care
-ABBV,Health Care
-BMY,Health Care
-GILD,Health Care
-PEP,Consumer Staples
-AMZN,Consumer Discretionary
-NKE,Consumer Discretionary
-FB,Communication Services
-DIS,Communication Services
-T,Communication Services
-GOOGL,Communication Services
-BA,Industrials
-LMT,Industrials
-JPM,Financials
-MA,Financials
-PYPL,Financials
-MMM,Materials
-DD,Materials
+BMY,Technology
+ABBV,Technology
+PEP,Technology
+AMZN,Health Care
+FB,Health Care
+GOOGL,Health Care
+BA,Health Care
+LMT,Consumer Staples
+MA,Consumer Discretionary
+JPM,Consumer Discretionary
+DD,Communication Services

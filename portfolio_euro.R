@@ -13,36 +13,113 @@ library(svMisc)
 options(stringsAsFactors = F)
 euro_list<-read.csv('euro_list.csv')
 euro_list$Date<-as.Date(euro_list$Date, format = '%m/%d/%y')
-euro_comps<-colnames(euro_list[-1])
+euro_comps<-colnames(euro_list[-c(1,2)])
 
 euro_list<-na.omit(euro_list)
-euro_price<-xts(euro_list[,2:11],euro_list$Date )
-euro_price_train<-euro_price["/2017"] 
 
-spxx<-read.csv('sxxp_index.csv')
-spxx$Date<-as.Date(spxx$Date, format = '%m/%d/%y')
-spxx<-na.omit(spxx)
-spxx<-xts(spxx$sxxp, order.by = spxx$Date )
+euro_price<-xts(euro_list[,3:9],euro_list$Date )
+euro_price_train<-euro_price["/2017"] 
+ 
+spxx<-xts(euro_list$SXXP, order.by = euro_list$Date )
 euro_price_test<-euro_price["2018"] 
 spxx<-spxx['2018']
 names(spxx)<-'spxx'
+
+n_sim<-10000
+simul<-as.data.frame(matrix(NA, nrow = n_sim, ncol=11))
+names(simul)<-c('as1','as2','as3','as4','as5','as6','as7','MVreturn','MVrisk','TGreturn','TGrisk')
+
+t1<-Sys.time()
+set.seed(77)
+pb <- txtProgressBar(min = 1, max = n_sim, style = 3)
+for( i in 1:10)
+{
+  
+  progress(i, progress.bar = TRUE)
+  Sys.sleep(0.01)
+ 
+  ticker_list<-euro_comps
+  simul[i,c(1:length(ticker_list))]<-euro_comps
+  
+  portfolioPrices_n<-euro_price_train[,ticker_list]
+
+  
+  #Calculate Monthly or Weekly Returns
+  Stock_Data <- portfolioPrices_n %>% lapply(function(x) monthlyReturn(x))
+  
+  portfolioReturns <- do.call(merge, Stock_Data)
+  # keep only the dates that have closing prices for all tickers
+  portfolioReturns <- portfolioReturns[apply(portfolioReturns,1,function(x) all(!is.na(x))),]
+  colnames(portfolioReturns) <- ticker_list
+  portfolioReturns <- as.timeSeries(portfolioReturns)
+  
+  scenarios <-dim(portfolioReturns)[1]
+  assets <- dim(portfolioReturns)[2]
+  
+  spec <- portfolioSpec()
+  setSolver(spec) <- "solveRquadprog"
+  setNFrontierPoints(spec) <-dim(portfolioReturns)[2]
+  constraints <- c('minW[1:assets]=0.03', 'maxW[1:assets]=0.25')
+  portfolioConstraints(portfolioReturns, spec, constraints)
+  
+  # calculate the efficient frontier
+  effFrontier <- portfolioFrontier(portfolioReturns, constraints = constraints)
+  
+  # plot frontier
+  #'Options
+  #'1: Plot Efficient Frontier
+  #'2: Plot Minimum Variance Portfolio
+  #'3: Plot Tangency Portfolio
+  #'4: Plot Risk Returns of Each Asset
+  #'5: Plot Equal Weights Portfolio
+  #'6: Plot Two Asset Frontiers (Long)
+  #'7: Plot Monte Carlo Portfolios
+  #'8: Plot Sharpe Ratio
+  #plot(effFrontier,c(1,2,3,4))
+  
+  #Plot Frontier Weights (Can Adjust Number of Points)
+  frontierWeights <- getWeights(effFrontier) # get allocations for each instrument for each point on the efficient frontier
+  colnames(frontierWeights) <- ticker_list
+  risk_return <- frontierPoints(effFrontier)
+  
+  
+  
+  #Get Minimum Variance Port, Tangency Port, etc.
+  mvp <- minvariancePortfolio(portfolioReturns, spec=spec, constraints=constraints)
+  simul[i,"MVreturn"]<-mvp@portfolio@portfolio$targetReturn[[1]]
+  simul[i,"MVrisk"]<-mvp@portfolio@portfolio$targetRisk[[1]]
+  simul[i, 'MVnComp']<-sum(mvp@portfolio@portfolio$weights>0)
+  
+  tangencyPort <- tangencyPortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
+  
+  simul[i,"TGreturn"]<-tangencyPort@portfolio@portfolio$targetReturn[[1]]
+  simul[i,"TGrisk"]<-tangencyPort@portfolio@portfolio$targetRisk[[1]]
+  simul[i, 'TGnComp']<-sum(tangencyPort@portfolio@portfolio$weights>0)
+  
+  setTxtProgressBar(pb, i)
+  
+}
+close(pb)
+  
+
 
 performance<-function(simul_data) {
   
   simul<-simul_data
   simul$check<-ifelse(simul$TGreturn>simul$TGrisk,1,0)
-  simul$MVreturn<-as.numeric(simul$MVreturn)
-  simul$MVrisk<-as.numeric(simul$MVrisk)
-  simul$TGreturn<-as.numeric(simul$TGreturn)
+  
+  
   simul$R_P_tg<-simul$TGreturn/simul$TGrisk
   simul$R_P_mv<-simul$MVreturn/simul$MVrisk
   
-  simul<-simul[order(simul$R_P_tg,decreasing = T),]
-  ncol<-sum(head(!is.na(simul[1:10]),1))
+  simul<-simul[with(simul, order(TGnComp, R_P_tg,decreasing = T)),]
+  
+  ncol<-sum(head(!is.na(simul[1:7]),1))
   best_portf_tg<- unlist(simul[1,1:ncol])
   
-  simul<-simul[order(simul$R_P_mv,decreasing = T),]
-  ncol<-sum(head(!is.na(simul[1:10]),1))
+  simul<-simul[with(simul, order(MVnComp, R_P_mv,decreasing = T)),]
+  
+  ncol<-sum(head(!is.na(simul[1:7]),1))
   best_portf_mv<- unlist(simul[1,1:ncol])
   
   
@@ -150,78 +227,6 @@ performance<-function(simul_data) {
   
 }
 
-n_sim<-10000
-simul<-as.data.frame(matrix(NA, nrow = n_sim, ncol=14))
-names(simul)<-c('as1','as2','as3','as4','as5','as6','as7','as8','as9','as10','MVreturn','MVrisk','TGreturn','TGrisk')
-
-t1<-Sys.time()
-set.seed(77)
-pb <- txtProgressBar(min = 1, max = n_sim, style = 3)
-for( i in 1:n_sim)
-{
-  
-  progress(i, progress.bar = TRUE)
-  Sys.sleep(0.01)
-  ticker_list<-euro_comps[sample(seq(1,10,by=1),size=sample(seq(6,10,1),size=1))]
-  simul[i,c(1:length(ticker_list))]<-ticker_list
-  
-  portfolioPrices_n<-euro_price_train[,ticker_list]
-
-  
-  #Calculate Monthly or Weekly Returns
-  Stock_Data <- portfolioPrices_n %>% lapply(function(x) monthlyReturn(x))
-  
-  portfolioReturns <- do.call(merge, Stock_Data)
-  # keep only the dates that have closing prices for all tickers
-  portfolioReturns <- portfolioReturns[apply(portfolioReturns,1,function(x) all(!is.na(x))),]
-  colnames(portfolioReturns) <- ticker_list
-  portfolioReturns <- as.timeSeries(portfolioReturns)
-  
-  scenarios <-dim(portfolioReturns)[1]
-  assets <- dim(portfolioReturns)[2]
-  
-  spec <- portfolioSpec()
-  setSolver(spec) <- "solveRquadprog"
-  setNFrontierPoints(spec) <-dim(portfolioReturns)[2]
-  constraints <- c('minW[1:assets]=0', 'maxW[1:assets]=0.3')
-  portfolioConstraints(portfolioReturns, spec, constraints)
-  
-  # calculate the efficient frontier
-  effFrontier <- portfolioFrontier(portfolioReturns, constraints = constraints)
-  
-  # plot frontier
-  #'Options
-  #'1: Plot Efficient Frontier
-  #'2: Plot Minimum Variance Portfolio
-  #'3: Plot Tangency Portfolio
-  #'4: Plot Risk Returns of Each Asset
-  #'5: Plot Equal Weights Portfolio
-  #'6: Plot Two Asset Frontiers (Long)
-  #'7: Plot Monte Carlo Portfolios
-  #'8: Plot Sharpe Ratio
-  #plot(effFrontier,c(1,2,3,4))
-  
-  #Plot Frontier Weights (Can Adjust Number of Points)
-  frontierWeights <- getWeights(effFrontier) # get allocations for each instrument for each point on the efficient frontier
-  colnames(frontierWeights) <- ticker_list
-  risk_return <- frontierPoints(effFrontier)
-  
-  
-  
-  #Get Minimum Variance Port, Tangency Port, etc.
-  mvp <- minvariancePortfolio(portfolioReturns, spec=spec, constraints=constraints)
-  simul[i,"MVreturn"]<-mvp@portfolio@portfolio$targetReturn[[1]]
-  simul[i,"MVrisk"]<-mvp@portfolio@portfolio$targetRisk[[1]]
-  
-  tangencyPort <- tangencyPortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
-  
-  simul[i,"TGreturn"]<-tangencyPort@portfolio@portfolio$targetReturn[[1]]
-  simul[i,"TGrisk"]<-tangencyPort@portfolio@portfolio$targetRisk[[1]]
-  setTxtProgressBar(pb, i)
-  
-}
-close(pb)
-  
 performance(simul)
 
 

@@ -18,24 +18,24 @@ spy_list<-subset(spy_list,! Ticker  %in% c('RDS-A','СCI'))
 portfolioPrices <- NULL
 for (Ticker in spy_list$Ticker)
   portfolioPrices <- cbind(portfolioPrices,
-                           getSymbols(Ticker, from="2010-01-01",to="2018-01-01", auto.assign=FALSE)[,4])
+                           getSymbols(Ticker, from="1998-01-01",to="2018-01-01", auto.assign=FALSE)[,4])
 
 
 
 
 colnames(portfolioPrices)<-spy_list$Ticker
 
-simul<-as.data.frame(matrix(NA, nrow = 30000, ncol=19))
-names(simul)<-c('as1','as2','as3','as4','as5','as6','as7','as8','as9','as10','as11','as12','as13','as14','as15','MVreturn','MVrisk','TGreturn','TGrisk')
+simul<-as.data.frame(matrix(NA, nrow = 10000, ncol=21))
+names(simul)<-c('as1','as2','as3','as4','as5','as6','as7','as8','as9','as10','as11','as12','as13','as14','as15','MVreturn','MVrisk','MVnComp', 'TGreturn','TGrisk','TGnComp')
 
 t1<-Sys.time()
 set.seed(77)
-for( i in 1:30000)
+for( i in 1:10000)
 {
   
-  
  
-  ticker_list<-spy_list[sample(seq(1,25,by=1),size=sample(seq(7,15,1),size=1)),'Ticker']
+ 
+  ticker_list<-spy_list[sample(seq(1,16,by=1),size=sample(seq(7,15,1),size=1)),'Ticker']
   simul[i,c(1:length(ticker_list))]<-ticker_list
   
   portfolioPrices_n<-portfolioPrices[,ticker_list]
@@ -56,7 +56,7 @@ for( i in 1:30000)
   spec <- portfolioSpec()
   setSolver(spec) <- "solveRquadprog"
   setNFrontierPoints(spec) <-dim(portfolioReturns)[2]
-  constraints <- c('minW[1:assets]=0', 'maxW[1:assets]=0.3')
+  constraints <- c('minW[1:assets]=0', 'maxW[1:assets]=0.35')
   portfolioConstraints(portfolioReturns, spec, constraints)
   
   # calculate the efficient frontier
@@ -86,12 +86,14 @@ for( i in 1:30000)
   
   simul[i,"MVreturn"]<-mvp@portfolio@portfolio$targetReturn[[1]]
   simul[i,"MVrisk"]<-mvp@portfolio@portfolio$targetRisk[[1]]
+  simul[i, 'MVnComp']<-sum(mvp@portfolio@portfolio$weights>0)
   
   tangencyPort <- tangencyPortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
   
   simul[i,"TGreturn"]<-tangencyPort@portfolio@portfolio$targetReturn[[1]]
   simul[i,"TGrisk"]<-tangencyPort@portfolio@portfolio$targetRisk[[1]]
- 
+  simul[i, 'TGnComp']<-sum(tangencyPort@portfolio@portfolio$weights>0)
+  
   
 }
 
@@ -103,17 +105,16 @@ performance<-function(simul_data) {
   
   simul<-simul_data
   simul$check<-ifelse(simul$TGreturn>simul$TGrisk,1,0)
-  simul$MVreturn<-as.numeric(simul$MVreturn)
-  simul$MVrisk<-as.numeric(simul$MVrisk)
-  simul$TGreturn<-as.numeric(simul$TGreturn)
+ 
   simul$R_P_tg<-simul$TGreturn/simul$TGrisk
   simul$R_P_mv<-simul$MVreturn/simul$MVrisk
   
-  simul<-simul[order(simul$R_P_tg,decreasing = T),]
+  simul<-simul[with(simul, order(TGnComp, R_P_tg,decreasing = T)),]
+  
   ncol<-sum(head(!is.na(simul[1:15]),1))
   best_portf_tg<- unlist(simul[1,1:ncol])
   
-  simul<-simul[order(simul$R_P_mv,decreasing = T),]
+  simul<-simul[with(simul, order(MVnComp, R_P_mv,decreasing = T)),]
   ncol<-sum(head(!is.na(simul[1:15]),1))
   best_portf_mv<- unlist(simul[1,1:ncol])
   
@@ -159,6 +160,7 @@ performance<-function(simul_data) {
   mvp <- minvariancePortfolio(portfolioReturns, spec=portfolioSpec(), constraints=constraints)
   
   tailoredFrontierPlot(object=effFrontier)
+ 
   
   mv_weigth<-as.data.frame(getWeights(mvp))
   mv_weigth$ticker<-rownames(mv_weigth)
@@ -167,7 +169,7 @@ performance<-function(simul_data) {
   backtest_prices<-NULL
   for (Ticker in c(spy_list$Ticker,'SPY'))
     backtest_prices <- cbind(backtest_prices,
-                             getSymbols(Ticker, from="2018-01-01",to="2019-07-01", auto.assign=FALSE)[,4])
+                             getSymbols(Ticker, from="2018-01-01",to="2019-07-22", auto.assign=FALSE)[,4])
   
   
   Stock_Data_test<- backtest_prices %>% lapply(function(x) weeklyReturn(x))
